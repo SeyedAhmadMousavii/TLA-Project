@@ -1,121 +1,140 @@
 # -*- coding: utf-8 -*-
-"""A Turing machine simulator skeleton.
-
-    Accepting '#'
-    =============
-
-    >>> from turing_machine import TuringMachine
-
-    Instantiate the machine with particular transitions.
-
-    >>> one_hash = TuringMachine(
-    ...     {
-    ...         ('q0', '#'): ('saw_#', '#', 'R'),
-    ...         ('saw_#', ''): ('qa', '', 'R'),
-    ...     }
-    ... )
-
-    Check whether it accepts a string:
-
-    >>> one_hash.accepts('#')
-    True
-
-    >>> one_hash.accepts('##')
-    False
-
-    Check whether it rejects a string:
-
-    >>> one_hash.rejects('#')
-    False
-
-    >>> one_hash.rejects('##')
-    True
-
-"""
+"""A Turing machine simulator."""
 
 import logging
 from itertools import islice
 
+logging.basicConfig(level=logging.WARNING, format='%(message)s')
+
 
 class TuringMachine:
-    """Turing machine simulator class.
-
-    A machine is instantiated with transitions, start, accept and reject states
-    and a blank symbol. We assume that the input and the tape alphabet can be
-    deducted from the transitions.
-
-    :param dict transitions: a mapping from (state, symbol) tuples to (state,
-    symbol, direction) tuple. Directions are either 'L' (for left) or 'R' (for right).
-
-    :param start_state: the initial state of the machine.
-
-    :param accept_state: the accept state.
-
-    :param reject_state: the reject state.
-
-    :blank_symbol: the special symbol that marks the tape cell to be empty.
-
-    """
+    """Turing machine simulator class."""
 
     def __init__(self, transitions, start_state='q0', accept_state='qa', reject_state='qr', blank_symbol=''):
-        # TODO: Implement the constructor. Initialize transitions, start_state, accept_state,
-        # reject_state, blank_symbol, and any other helpful structures.
-        pass
-
+        self.transitions = transitions
+        self.start_state = start_state
+        self.accept_state = accept_state
+        self.reject_state = reject_state
+        self.blank_symbol = blank_symbol
+        self.two_way_tape = False
+    
+    def enable_two_way_tape(self):
+        self.two_way_tape = True
+    
     def run(self, input_):
-        """Execute the Turing machine for a particular input.
-
-        :param input_: the input that is written on the tape. It can be a list
-        of strings, or just a string, in which case each letter is treated as a symbol.
-
-        This method MUST be a Python generator. It should yield a (action, configuration) tuple
-        at each step of the computation.
+        if isinstance(input_, str):
+            tape_list = list(input_)
+        else:
+            tape_list = list(input_)
         
-        The action is either 'Accept', 'Reject' or None. 
+        if not tape_list:
+            tape_list = [self.blank_symbol]
         
-        Configuration is a dictionary with the following keys:
-        - 'state': the current state,
-        - 'left_hand_side': list of symbols on the left hand side of the current position (closest first),
-        - 'symbol': the current symbol under the head,
-        - 'right_hand_side': list of symbols on the right hand side of the current position.
-
-        """
-        # TODO: Implement the simulator loop as a Python generator.
-        # 1. Initialize the tape using two lists (left_hand_side and right_hand_side) and the current symbol.
-        # 2. Yield the current step (action, configuration).
-        # 3. Read transitions and update state, write symbols, and move the head ('L' or 'R').
-        # 4. Handle tape expansion dynamically for both left and right directions (double-sided infinite tape).
-        # 5. Log a warning using logging.warning() if the singly-infinite tape boundary is crossed before Part III.
-        pass
-
+        left_side = []
+        current_symbol = tape_list[0] if tape_list else self.blank_symbol
+        right_side = tape_list[1:] if len(tape_list) > 1 else []
+        
+        state = self.start_state
+        
+        while True:
+            config = {
+                'state': state,
+                'left_hand_side': left_side.copy(),
+                'symbol': current_symbol,
+                'right_hand_side': right_side.copy()
+            }
+            
+            if state == self.accept_state:
+                yield ('Accept', config)
+                return
+            elif state == self.reject_state:
+                yield ('Reject', config)
+                return
+            
+            yield (None, config)
+            
+            key = (state, current_symbol)
+            if key not in self.transitions:
+                state = self.reject_state
+                continue
+            
+            next_state, write_symbol, direction = self.transitions[key]
+            
+            current_symbol = write_symbol
+            
+            if direction == 'L' or direction == 'l':
+                if left_side:
+                    current_symbol = left_side.pop()
+                else:
+                    if not self.two_way_tape:
+                        logging.warning("Warning: Moving left beyond leftmost cell in singly-infinite tape")
+                    current_symbol = self.blank_symbol
+            
+            elif direction == 'R' or direction == 'r':
+                if right_side:
+                    current_symbol = right_side.pop(0)
+                    left_side.append(write_symbol)
+                else:
+                    left_side.append(write_symbol)
+                    current_symbol = self.blank_symbol
+            
+            else:
+                raise ValueError(f"Unknown direction: {direction}")
+            
+            state = next_state
+    
     def accepts(self, input_, step_limit=100):
-        """Check whether the Turing machine accepts a string.
-
-        :param input_: the input string or list.
-        :param step_limit: the maximum number of steps to simulate before stopping.
-        :return: True if the machine halts in accept_state, False if it rejects,
-                 or None if the step limit is reached without halting.
-        """
-        # TODO: Run the generator up to step_limit and check the action of the final yielded state.
-        # Remember to log a warning if the step_limit is reached without halting.
-        pass
-
-    def rejects(self, input_, **kwargs):
-        """Check whether the Turing machine rejects a string.
-
-        :param input_: the input string or list.
-        :return: True if the machine rejects the string, False if it accepts.
-        """
-        # TODO: Determine rejection by checking if accepts() returns False.
-        pass
-
+        steps = list(islice(self.run(input_), step_limit))
+        
+        if not steps:
+            logging.warning(f"Step limit {step_limit} reached without halting")
+            return None
+        
+        final_action, _ = steps[-1]
+        
+        if final_action == 'Accept':
+            return True
+        elif final_action == 'Reject':
+            return False
+        else:
+            logging.warning(f"Step limit {step_limit} reached without halting")
+            return None
+    
+    def rejects(self, input_, step_limit=100):
+        result = self.accepts(input_, step_limit)
+        if result is None:
+            return None
+        return not result
+    
     def debug(self, input_, step_limit=100, colored=False):
-        """Print the execution configuration of the machine per transition for debugging.
-
-        :param input_: the input string or list.
-        :param step_limit: the maximum number of steps to output.
-        :param colored: True to output colored boundaries in terminal.
-        """
-        # TODO: Loop over the steps yielded by run() up to step_limit and print the tape configuration.
-        # E.g., print the state and the tape with the head highlighted in brackets like: left[symbol]right
-        pass
+        print(f"\nDebugging: input = '{input_}'")
+        print("-" * 50)
+        
+        for step_num, (action, config) in enumerate(islice(self.run(input_), step_limit)):
+            state = config['state']
+            left = config['left_hand_side']
+            symbol = config['symbol']
+            right = config['right_hand_side']
+            
+            tape_display = []
+            
+            left_part = ''.join(reversed(left))
+            if left_part:
+                tape_display.append(left_part)
+            
+            symbol_str = symbol if symbol != '' else '□'
+            tape_display.append(f"[{symbol_str}]")
+            
+            right_part = ''.join(right)
+            if right_part:
+                tape_display.append(right_part)
+            
+            tape_str = ''.join(tape_display)
+            
+            print(f"Step {step_num:3d}: state={state:8s} | tape: {tape_str}")
+            
+            if action is not None:
+                print(f"\n>>> Machine {action}ED at step {step_num} <<<\n")
+                break
+        else:
+            print(f"\n>>> Step limit {step_limit} reached without halting <<<\n")
