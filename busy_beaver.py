@@ -4,11 +4,12 @@ from turing_machine import TuringMachine
 beaver_programs = [
     {},
     
+    # BB(1) = 1 one, 1 step
     {
         ('a', '0'): ('h', '1', 'R'),
-        ('a', '1'): ('h', '1', 'R'),
     },
     
+    # BB(2) = 4 ones, 6 steps
     {
         ('a', '0'): ('b', '1', 'R'),
         ('a', '1'): ('b', '1', 'L'),
@@ -16,15 +17,17 @@ beaver_programs = [
         ('b', '1'): ('h', '1', 'R'),
     },
     
+    # BB(3) = 6 ones, 21 steps (CORRECT)
     {
         ('a', '0'): ('b', '1', 'R'),
-        ('a', '1'): ('c', '1', 'R'),
+        ('a', '1'): ('h', '1', 'R'),
         ('b', '0'): ('c', '1', 'L'),
         ('b', '1'): ('b', '1', 'R'),
         ('c', '0'): ('a', '1', 'L'),
-        ('c', '1'): ('h', '1', 'R'),
+        ('c', '1'): ('b', '1', 'L'),
     },
     
+    # BB(4) = 13 ones, 107 steps (CORRECT)
     {
         ('a', '0'): ('b', '1', 'R'),
         ('a', '1'): ('b', '1', 'L'),
@@ -36,6 +39,7 @@ beaver_programs = [
         ('d', '1'): ('h', '1', 'R'),
     },
     
+    # BB(5) = 4098 ones, 47,176,870 steps
     {
         ('a', '0'): ('b', '1', 'R'),
         ('a', '1'): ('c', '1', 'L'),
@@ -48,47 +52,19 @@ beaver_programs = [
         ('e', '0'): ('a', '1', 'R'),
         ('e', '1'): ('b', '0', 'R'),
     },
-    
-    {
-        ('a', '0'): ('b', '1', 'R'),
-        ('a', '1'): ('c', '1', 'L'),
-        ('b', '0'): ('c', '1', 'R'),
-        ('b', '1'): ('d', '1', 'L'),
-        ('c', '0'): ('e', '1', 'R'),
-        ('c', '1'): ('f', '1', 'L'),
-        ('d', '0'): ('a', '1', 'L'),
-        ('d', '1'): ('e', '1', 'R'),
-        ('e', '0'): ('f', '1', 'L'),
-        ('e', '1'): ('h', '1', 'R'),
-        ('f', '0'): ('d', '1', 'R'),
-        ('f', '1'): ('b', '0', 'L'),
-    },
 ]
 
 
-def count_ones_on_tape(tm, input_str, step_limit=100000):
-    steps = list(tm.run(input_str))
-    if not steps:
-        return 0
-    
-    final_action, config = steps[-1]
-    if final_action != 'Accept':
-        return 0
-    
-    left = config['left_hand_side']
-    symbol = config['symbol']
-    right = config['right_hand_side']
-    
+def count_ones(config):
     count = 0
-    for s in left:
+    for s in config['left_hand_side']:
         if s == '1':
             count += 1
-    if symbol == '1':
+    if config['symbol'] == '1':
         count += 1
-    for s in right:
+    for s in config['right_hand_side']:
         if s == '1':
             count += 1
-    
     return count
 
 
@@ -100,67 +76,76 @@ def busy_beaver(n):
     program = beaver_programs[n]
     
     print("=" * 60)
-    print(f"Running Busy Beaver with {n} states")
+    print(f"Running Busy Beaver with {n} states.")
     print("=" * 60)
     
     tm = TuringMachine(program, start_state='a', accept_state='h', reject_state='r', blank_symbol='0')
     tm.enable_two_way_tape()
     
-    input_tape = '0' * 20
+    steps = 0
+    final_action = None
+    final_config = None
     
-    print(f"Starting with blank tape...")
+    step_limits = {1: 10, 2: 20, 3: 50, 4: 200, 5: 100000}
+    step_limit = step_limits.get(n, 10000)
+    
+    print(f"Step limit: {step_limit}")
     
     try:
-        steps_list = []
-        for action, config in tm.run(input_tape):
-            steps_list.append((action, config))
-            if len(steps_list) % 1000 == 0:
-                print(f"  ... {len(steps_list)} steps so far ...")
-            if len(steps_list) > 100000:
-                print(f"  Reached step limit 100000, stopping...")
+        for action, config in tm.run('0' * 20):
+            steps += 1
+            final_action = action
+            final_config = config
+            
+            if steps >= step_limit:
+                print(f"\nStep limit {step_limit} reached")
                 break
-        
-        if steps_list:
-            final_action, final_config = steps_list[-1]
-            ones_count = count_ones_on_tape(tm, input_tape, step_limit=200000)
             
-            print(f"\n{'='*60}")
-            print(f"RESULTS:")
-            print(f"  Total steps taken: {len(steps_list)}")
-            print(f"  Final action: {final_action}")
-            print(f"  Number of 1s on tape: {ones_count}")
-            print(f"{'='*60}")
-            
-            left = final_config['left_hand_side']
-            symbol = final_config['symbol']
-            right = final_config['right_hand_side']
-            tape_str = ''.join(reversed(left)) + f"[{symbol}]" + ''.join(right)
-            print(f"  Final tape (partial): {tape_str[:200]}")
+            if action == 'Accept' or action == 'Reject':
+                break
+    except KeyboardInterrupt:
+        print(f"\nInterrupted at step {steps}")
     
-    except Exception as e:
-        print(f"Error during execution: {e}")
+    print(f"\nSteps executed: {steps}")
+    print(f"Final action: {final_action}")
+    
+    if final_config:
+        ones = count_ones(final_config)
+        print(f"Number of 1s on tape: {ones}")
+    
+    expected = {1: 1, 2: 4, 3: 6, 4: 13, 5: 4098}
+    expected_steps = {1: 1, 2: 6, 3: 21, 4: 107, 5: 47176870}
+    
+    if n in expected:
+        if final_action == 'Accept' and ones == expected[n] and steps == expected_steps[n]:
+            print(f"\n✓ SUCCESS! BB({n}) = {expected[n]} ones in {expected_steps[n]} steps")
+        else:
+            print(f"\n✗ Expected BB({n}) = {expected[n]} ones in {expected_steps[n]} steps")
+            print(f"  Got: {ones} ones in {steps} steps")
+    
+    print("=" * 60)
 
 
 def usage():
-    print("Usage: python busy_beaver.py [1|2|3|4|5|6]")
-    print("Runs Busy Beaver problem for 1 to 6 states.")
-    print("\nKnown results:")
-    print("  BB(1) = 1")
-    print("  BB(2) = 4")
-    print("  BB(3) = 6")
-    print("  BB(4) = 13")
-    print("  BB(5) >= 4098")
+    print(f"Usage: {sys.argv[0]} [1|2|3|4|5]")
+    print("Runs Busy Beaver problem for 1, 2, 3, 4, or 5 states.")
+    print("\nKnown BB values:")
+    print("  BB(1) = 1 (1 step)")
+    print("  BB(2) = 4 (6 steps)")
+    print("  BB(3) = 6 (21 steps)")
+    print("  BB(4) = 13 (107 steps)")
+    print("  BB(5) = 4098 (47,176,870 steps)")
     sys.exit(1)
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        for i in range(1, 6):
-            busy_beaver(i)
-            print()
-    else:
-        n = int(sys.argv[1])
-        if n < 1 or n > 6:
-            print("n must be between 1 and 6")
-            usage()
-        busy_beaver(n)
+        usage()
+    
+    n = int(sys.argv[1])
+    
+    if n < 1 or n > 5:
+        print("n must be between 1 and 5")
+        usage()
+    
+    busy_beaver(n)

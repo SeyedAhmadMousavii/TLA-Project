@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-"""A Turing machine simulator."""
-
 import logging
 from itertools import islice
 
@@ -8,8 +6,7 @@ logging.basicConfig(level=logging.WARNING, format='%(message)s')
 
 
 class TuringMachine:
-    """Turing machine simulator class."""
-
+    
     def __init__(self, transitions, start_state='q0', accept_state='qa', reject_state='qr', blank_symbol=''):
         self.transitions = transitions
         self.start_state = start_state
@@ -23,25 +20,26 @@ class TuringMachine:
     
     def run(self, input_):
         if isinstance(input_, str):
-            tape_list = list(input_)
+            tape = list(input_)
         else:
-            tape_list = list(input_)
+            tape = list(input_)
         
-        if not tape_list:
-            tape_list = [self.blank_symbol]
-        
-        left_side = []
-        current_symbol = tape_list[0] if tape_list else self.blank_symbol
-        right_side = tape_list[1:] if len(tape_list) > 1 else []
+        if not tape:
+            tape = [self.blank_symbol]
         
         state = self.start_state
+        head_pos = 0
         
         while True:
+            left = tape[:head_pos]
+            current_symbol = tape[head_pos] if head_pos < len(tape) else self.blank_symbol
+            right = tape[head_pos + 1:] if head_pos + 1 < len(tape) else []
+            
             config = {
                 'state': state,
-                'left_hand_side': left_side.copy(),
+                'left_hand_side': list(reversed(left)),
                 'symbol': current_symbol,
-                'right_hand_side': right_side.copy()
+                'right_hand_side': right
             }
             
             if state == self.accept_state:
@@ -54,32 +52,28 @@ class TuringMachine:
             yield (None, config)
             
             key = (state, current_symbol)
+            
             if key not in self.transitions:
                 state = self.reject_state
                 continue
             
             next_state, write_symbol, direction = self.transitions[key]
             
-            current_symbol = write_symbol
+            tape[head_pos] = write_symbol
             
             if direction == 'L' or direction == 'l':
-                if left_side:
-                    current_symbol = left_side.pop()
-                else:
+                head_pos -= 1
+                if head_pos < 0:
                     if not self.two_way_tape:
-                        logging.warning("Warning: Moving left beyond leftmost cell in singly-infinite tape")
-                    current_symbol = self.blank_symbol
-            
+                        logging.warning('Moving left beyond leftmost cell in singly-infinite tape')
+                    tape.insert(0, self.blank_symbol)
+                    head_pos = 0
             elif direction == 'R' or direction == 'r':
-                if right_side:
-                    current_symbol = right_side.pop(0)
-                    left_side.append(write_symbol)
-                else:
-                    left_side.append(write_symbol)
-                    current_symbol = self.blank_symbol
-            
+                head_pos += 1
+                if head_pos >= len(tape):
+                    tape.append(self.blank_symbol)
             else:
-                raise ValueError(f"Unknown direction: {direction}")
+                raise ValueError(f'Invalid direction: {direction}')
             
             state = next_state
     
@@ -87,17 +81,17 @@ class TuringMachine:
         steps = list(islice(self.run(input_), step_limit))
         
         if not steps:
-            logging.warning(f"Step limit {step_limit} reached without halting")
+            logging.warning(f'Step limit {step_limit} reached without halting')
             return None
         
-        final_action, _ = steps[-1]
+        action, _ = steps[-1]
         
-        if final_action == 'Accept':
+        if action == 'Accept':
             return True
-        elif final_action == 'Reject':
+        elif action == 'Reject':
             return False
         else:
-            logging.warning(f"Step limit {step_limit} reached without halting")
+            logging.warning(f'Step limit {step_limit} reached without halting')
             return None
     
     def rejects(self, input_, step_limit=100):
@@ -107,34 +101,19 @@ class TuringMachine:
         return not result
     
     def debug(self, input_, step_limit=100, colored=False):
-        print(f"\nDebugging: input = '{input_}'")
-        print("-" * 50)
+        print(f'\nDebugging: input = "{input_}"')
+        print('-' * 50)
         
-        for step_num, (action, config) in enumerate(islice(self.run(input_), step_limit)):
+        for i, (action, config) in enumerate(islice(self.run(input_), step_limit)):
             state = config['state']
-            left = config['left_hand_side']
-            symbol = config['symbol']
-            right = config['right_hand_side']
+            left = ''.join(reversed(config['left_hand_side']))
+            symbol = config['symbol'] if config['symbol'] != '' else '□'
+            right = ''.join(config['right_hand_side'])
             
-            tape_display = []
-            
-            left_part = ''.join(reversed(left))
-            if left_part:
-                tape_display.append(left_part)
-            
-            symbol_str = symbol if symbol != '' else '□'
-            tape_display.append(f"[{symbol_str}]")
-            
-            right_part = ''.join(right)
-            if right_part:
-                tape_display.append(right_part)
-            
-            tape_str = ''.join(tape_display)
-            
-            print(f"Step {step_num:3d}: state={state:8s} | tape: {tape_str}")
+            print(f'Step {i:3d}: state={state:8s} | tape: {left}[{symbol}]{right}')
             
             if action is not None:
-                print(f"\n>>> Machine {action}ED at step {step_num} <<<\n")
-                break
-        else:
-            print(f"\n>>> Step limit {step_limit} reached without halting <<<\n")
+                print(f'\n>>> Machine {action}ED at step {i} <<<\n')
+                return
+        
+        print(f'\n>>> Step limit {step_limit} reached without halting <<<\n')

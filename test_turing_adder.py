@@ -5,10 +5,8 @@ from test_turing_machine_example1 import print_states
 transitions = {
     ('q0', '1'): ('q0', '1', 'R'),
     ('q0', '0'): ('q1', '1', 'R'),
-    
     ('q1', '1'): ('q1', '1', 'R'),
     ('q1', ''): ('q2', '', 'L'),
-    
     ('q2', '1'): ('qa', '', 'R'),
 }
 
@@ -18,10 +16,9 @@ if __name__ == "__main__":
 
     def run(input_):
         w = input_
-        print("Input:", w)
-        result = machine.accepts(w, step_limit=200)
-        print("Accepted" if result else "Rejected")
-        machine.debug(w, step_limit=200)
+        print("Input:",w)
+        print("Accepted" if machine.accepts(w) else "Rejected")
+        machine.debug(w)
         print()
 
     run("110111")
