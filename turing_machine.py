@@ -157,7 +157,7 @@ class TuringMachine:
             symbol = (
                 config['symbol']
                 if config['symbol'] != ''
-                else '□'
+                else '_'
             )
 
             right = ''.join(

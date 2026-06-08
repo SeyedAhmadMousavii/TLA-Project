@@ -64,7 +64,7 @@ if __name__ == "__main__":
     def run(machine, name, step_limit=200):
         print(f'\n{name} Busy Beaver:')
         print('-' * 40)
-        machine.debug('0' * 20, step_limit=step_limit)
+        machine.debug('', step_limit=step_limit)
 
     run(bbeaver2, '2-state (BB2=4 ones, 6 steps)', step_limit=20)
     run(bbeaver3, '3-state (BB3=6 ones, 21 steps)', step_limit=50)

@@ -16,6 +16,7 @@ transitions = {
     ('q2', '1'): ('q3', 'Y', 'R'),
     ('q2', '0'): ('q5', '0', 'L'),
     ('q2', ''): ('q5', '', 'L'),
+    ('q2', 'Y'): ('q2', 'Y', 'R'),
     
     # Move to end of tape to write a copy of 1
     ('q3', '1'): ('q3', '1', 'R'),
@@ -60,12 +61,13 @@ transitions = {
 if __name__ == "__main__":
     print_states(transitions)
     machine = TuringMachine(transitions)
+    machine.enable_two_way_tape()
 
     def run(input_):
         print(f'Input: {input_}')
         result = machine.accepts(input_, step_limit=500)
         print('Accepted' if result else 'Rejected')
-        machine.debug(input_, step_limit=500)
+        machine.debug(input_, step_limit=120)
         print()
 
     run("110111")
