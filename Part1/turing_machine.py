@@ -21,39 +21,56 @@ class TuringMachine:
         self.reject_state = reject_state
         self.blank_symbol = blank_symbol
         self.two_way_tape = False
+        self._auto_two_way = False
 
     def enable_two_way_tape(self):
         self.two_way_tape = True
 
     def run(self, input_):
-        tape = list(input_)
-        if len(tape) == 0:
+        if input_ is None or input_ == '' or len(input_) == 0:
             tape = [self.blank_symbol]
+        else:
+            tape = list(input_)
 
         state = self.start_state
         head_pos = 0
 
         while True:
             if head_pos < 0:
-                if self.two_way_tape:
+                if self.two_way_tape or self._auto_two_way:
                     tape.insert(0, self.blank_symbol)
                     head_pos = 0
                 else:
-                    head_pos = 0
-            
-            if head_pos >= len(tape):
-                current_symbol = self.blank_symbol
-            else:
-                current_symbol = tape[head_pos]
+                    key = (state, tape[0] if len(tape) > 0 else self.blank_symbol)
+                    if key not in self.transitions:
+                        current_symbol = tape[0] if len(tape) > 0 else self.blank_symbol
+                        config = {
+                            'state': state,
+                            'left_hand_side': [],
+                            'symbol': current_symbol,
+                            'right_hand_side': tape[1:] if len(tape) > 1 else []
+                        }
+                        yield ('Reject', config)
+                        return
+                    else:
+                        self._auto_two_way = True
+                        logging.warning(
+                            "Singly-infinite tape boundary crossed. "
+                            "Auto-enabling two-way infinite tape."
+                        )
+                        tape.insert(0, self.blank_symbol)
+                        head_pos = 0
 
-            left_part = tape[:head_pos]
-            right_part = tape[head_pos + 1:] if head_pos + 1 < len(tape) else []
-            
+            while head_pos >= len(tape):
+                tape.append(self.blank_symbol)
+
+            current_symbol = tape[head_pos]
+
             config = {
                 'state': state,
-                'left_hand_side': list(reversed(left_part)),
+                'left_hand_side': list(reversed(tape[:head_pos])),
                 'symbol': current_symbol,
-                'right_hand_side': right_part
+                'right_hand_side': tape[head_pos + 1:]
             }
 
             if state == self.accept_state:
@@ -67,16 +84,13 @@ class TuringMachine:
             yield (None, config)
 
             key = (state, current_symbol)
-            
+
             if key not in self.transitions:
                 state = self.reject_state
                 continue
 
             next_state, write_symbol, direction = self.transitions[key]
 
-            while head_pos >= len(tape):
-                tape.append(self.blank_symbol)
-            
             tape[head_pos] = write_symbol
 
             if direction.upper() == 'R':
@@ -84,7 +98,7 @@ class TuringMachine:
             elif direction.upper() == 'L':
                 head_pos -= 1
             else:
-                raise ValueError(f'Invalid direction: {direction}')
+                raise ValueError(f'Invalid direction: {direction}. Must be "L" or "R".')
 
             state = next_state
 
@@ -116,7 +130,11 @@ class TuringMachine:
             left_str = ''.join(reversed(config['left_hand_side']))
             symbol = config['symbol'] if config['symbol'] != '' else '_'
             right_str = ''.join(config['right_hand_side'])
-            print(f'Step {i:3d}: state={state:8s} | tape: {left_str}[{symbol}]{right_str}')
+
+            if colored:
+                print(f'Step {i:3d}: state={state:8s} | tape: {left_str}\033[91m[{symbol}]\033[0m{right_str}')
+            else:
+                print(f'Step {i:3d}: state={state:8s} | tape: {left_str}[{symbol}]{right_str}')
 
             if action is not None:
                 print(f'\n>>> Machine {action}ED at step {i} <<<\n')
