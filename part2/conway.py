@@ -1,192 +1,140 @@
-"""
-The Game of Life (GoL) module named in honour of John Conway
-"""
 import numpy as np
-
-try:
-    from scipy import signal
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
-    print("Warning: scipy not installed. Fast convolution mode will not be available.")
-
+from scipy import signal
 
 def parse_pattern(filepath):
-    """Parse RLE or Plaintext pattern files."""
-    with open(filepath, 'r') as f:
-        content = f.read()
-    
-    # RLE format
-    if content.strip().startswith('x='):
-        lines = [l.strip() for l in content.split('\n') if l.strip() and not l.startswith('#')]
-        header = lines[0]
-        
-        import re
-        x_match = re.search(r'x\s*=\s*(\d+)', header)
-        y_match = re.search(r'y\s*=\s*(\d+)', header)
-        width = int(x_match.group(1)) if x_match else 100
-        height = int(y_match.group(1)) if y_match else 100
-        
-        data = ''.join(lines[1:])
-        if '!' in data:
-            data = data.split('!')[0]
-        data = ''.join(data.split())
-        
-        live_cells = []
-        row, col = 0, 0
-        i = 0
-        
-        while i < len(data):
-            ch = data[i]
-            count = 1
-            if ch.isdigit():
-                j = i
-                while j < len(data) and data[j].isdigit():
-                    j += 1
-                count = int(data[i:j])
-                i = j
-                ch = data[i] if i < len(data) else ''
-            
-            if ch == 'b':
-                col += count
-            elif ch == 'o':
-                for _ in range(count):
-                    live_cells.append((row, col))
-                    col += 1
-            elif ch == '$':
-                row += count
-                col = 0
-            i += 1
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read().strip()
+    lines = [line.strip() for line in content.splitlines() if line.strip() and not line.startswith('#')]
+    if any('x =' in line for line in lines):
+        return _parse_rle(content)
     else:
-        # Plaintext format
-        lines = []
-        for line in content.split('\n'):
-            line = line.strip()
-            if line and not line.startswith('!'):
-                lines.append(line)
-        
-        height = len(lines)
-        width = max(len(l) for l in lines) if lines else 0
-        live_cells = []
-        for r, line in enumerate(lines):
-            for c, ch in enumerate(line):
-                if ch in ['O', 'o']:
-                    live_cells.append((r, c))
-    
-    return width, height, live_cells
+        return _parse_plaintext(content)
 
+def _parse_rle(content):
+    pattern = ''
+    for line in content.splitlines():
+        if line.startswith('#') or '=' in line or not line.strip():
+            continue
+        pattern += line.strip()
+    rows = []
+    i = 0
+    current_row = []
+    count = ''
+    while i < len(pattern):
+        if pattern[i].isdigit():
+            count += pattern[i]
+        elif pattern[i] in 'bo':
+            num = int(count) if count else 1
+            val = 1 if pattern[i] == 'o' else 0
+            current_row.extend([val] * num)
+            count = ''
+        elif pattern[i] in '$!':
+            rows.append(current_row)
+            current_row = []
+            if pattern[i] == '!':
+                break
+        i += 1
+    if current_row:
+        rows.append(current_row)
+    max_w = max(len(r) for r in rows) if rows else 0
+    grid = np.zeros((len(rows), max_w), dtype=np.uint8)
+    for r_idx, row in enumerate(rows):
+        grid[r_idx, :len(row)] = row
+    live_cells = [(r, c) for r in range(grid.shape[0]) for c in range(grid.shape[1]) if grid[r, c] == 1]
+    return grid.shape[1], grid.shape[0], live_cells
+
+def _parse_plaintext(content):
+    rows = []
+    for line in content.splitlines():
+        if line.startswith('!'):
+            continue
+        row = [1 if c in 'oO*' else 0 for c in line if c in '.boO*']
+        if row:
+            rows.append(row)
+    if not rows:
+        return 0, 0, []
+    max_w = max(len(r) for r in rows)
+    grid = np.zeros((len(rows), max_w), dtype=np.uint8)
+    for r_idx, row in enumerate(rows):
+        grid[r_idx, :len(row)] = row
+    live_cells = [(r, c) for r in range(grid.shape[0]) for c in range(grid.shape[1]) if grid[r, c] == 1]
+    return grid.shape[1], grid.shape[0], live_cells
 
 class GameOfLife:
     def __init__(self, N=256, finite=False, fastMode=True):
-        self.grid = np.zeros((N, N), np.uint8)
+        N = int(N)
+        self.grid = np.zeros((N, N), dtype=np.uint8)
+        self.neighborhood = np.ones((3, 3), dtype=np.uint8)
+        self.neighborhood[1, 1] = 0
         self.finite = finite
-        self.fastMode = fastMode and SCIPY_AVAILABLE
+        self.fastMode = fastMode
         self.aliveValue = 1
-        self.rows = self.cols = N
+        self.deadValue = 0
+        self.rows = N
+        self.cols = N
 
     def getStates(self):
         return self.grid
 
+    def getGrid(self):
+        return self.getStates()
+
     def update_grid_fast(self, grid):
-        kernel = np.ones((3, 3), np.uint8)
-        kernel[1, 1] = 0
         if self.finite:
-            neighbor_count = signal.convolve2d(grid, kernel, mode='same', boundary='fill', fillvalue=0)
+            count = signal.convolve2d(grid, self.neighborhood, mode='same', boundary='fill', fillvalue=0)
         else:
-            neighbor_count = signal.convolve2d(grid, kernel, mode='same', boundary='wrap')
-        
-        new_grid = np.zeros_like(grid)
-        birth = (grid == 0) & (neighbor_count == 3)
-        survive = (grid == 1) & ((neighbor_count == 2) | (neighbor_count == 3))
-        new_grid[birth | survive] = 1
-        return new_grid
+            count = signal.convolve2d(grid, self.neighborhood, mode='same', boundary='wrap')
+        next_grid = np.zeros_like(grid)
+        next_grid[(grid == 0) & (count == 3)] = 1
+        next_grid[(grid == 1) & ((count == 2) | (count == 3))] = 1
+        return next_grid
 
     def evolve(self):
-        if self.fastMode and SCIPY_AVAILABLE:
+        if self.fastMode:
             self.grid = self.update_grid_fast(self.grid)
         else:
-            new_grid = np.zeros((self.rows, self.cols), np.uint8)
-            for r in range(self.rows):
-                for c in range(self.cols):
-                    neighbors = 0
-                    for dr in [-1, 0, 1]:
-                        for dc in [-1, 0, 1]:
-                            if dr == 0 and dc == 0:
+            new_grid = np.zeros_like(self.grid)
+            for i in range(self.rows):
+                for j in range(self.cols):
+                    total = 0
+                    for di in [-1, 0, 1]:
+                        for dj in [-1, 0, 1]:
+                            if di == 0 and dj == 0:
                                 continue
-                            nr, nc = r + dr, c + dc
+                            ni = i + di
+                            nj = j + dj
                             if self.finite:
-                                if 0 <= nr < self.rows and 0 <= nc < self.cols:
-                                    neighbors += self.grid[nr, nc]
+                                if 0 <= ni < self.rows and 0 <= nj < self.cols:
+                                    total += self.grid[ni, nj]
                             else:
-                                neighbors += self.grid[nr % self.rows, nc % self.cols]
-                    
-                    if self.grid[r, c] == 1:
-                        if neighbors == 2 or neighbors == 3:
-                            new_grid[r, c] = 1
+                                total += self.grid[ni % self.rows, nj % self.cols]
+                    if self.grid[i, j] == 1:
+                        new_grid[i, j] = 1 if total in (2, 3) else 0
                     else:
-                        if neighbors == 3:
-                            new_grid[r, c] = 1
+                        new_grid[i, j] = 1 if total == 3 else 0
             self.grid = new_grid
+        return self.grid
 
-    def insertBlinker(self, idx):
-        r, c = idx
-        self.grid[r, c+1] = 1
-        self.grid[r+1, c+1] = 1
-        self.grid[r+2, c+1] = 1
+    def insertBlinker(self, index=(0, 0)):
+        self.grid[index[0], index[1] + 1] = self.aliveValue
+        self.grid[index[0] + 1, index[1] + 1] = self.aliveValue
+        self.grid[index[0] + 2, index[1] + 1] = self.aliveValue
 
-    def insertGlider(self, idx):
-        r, c = idx
-        self.grid[r, c+1] = 1
-        self.grid[r+1, c+2] = 1
-        self.grid[r+2, c] = 1
-        self.grid[r+2, c+1] = 1
-        self.grid[r+2, c+2] = 1
+    def insertGlider(self, index=(0, 0)):
+        self.grid[index[0], index[1] + 1] = self.aliveValue
+        self.grid[index[0] + 1, index[1] + 2] = self.aliveValue
+        self.grid[index[0] + 2, index[1]] = self.aliveValue
+        self.grid[index[0] + 2, index[1] + 1] = self.aliveValue
+        self.grid[index[0] + 2, index[1] + 2] = self.aliveValue
 
-    def insertGliderGun(self, idx):
-        r, c = idx
-        # Fixed left block
-        self.grid[r+5, c+1] = 1
-        self.grid[r+5, c+2] = 1
-        self.grid[r+6, c+1] = 1
-        self.grid[r+6, c+2] = 1
-        
-        # Rest of the gun
-        self.grid[r+1, c+26] = 1
-        self.grid[r+2, c+24] = 1
-        self.grid[r+2, c+26] = 1
-        self.grid[r+3, c+14] = 1
-        self.grid[r+3, c+15] = 1
-        self.grid[r+3, c+22] = 1
-        self.grid[r+3, c+23] = 1
-        self.grid[r+3, c+36] = 1
-        self.grid[r+3, c+37] = 1
-        self.grid[r+4, c+13] = 1
-        self.grid[r+4, c+17] = 1
-        self.grid[r+4, c+22] = 1
-        self.grid[r+4, c+23] = 1
-        self.grid[r+4, c+36] = 1
-        self.grid[r+4, c+37] = 1
-        self.grid[r+5, c+12] = 1
-        self.grid[r+5, c+18] = 1
-        self.grid[r+5, c+22] = 1
-        self.grid[r+5, c+23] = 1
-        self.grid[r+6, c+12] = 1
-        self.grid[r+6, c+16] = 1
-        self.grid[r+6, c+18] = 1
-        self.grid[r+6, c+19] = 1
-        self.grid[r+6, c+24] = 1
-        self.grid[r+6, c+26] = 1
-        self.grid[r+7, c+12] = 1
-        self.grid[r+7, c+18] = 1
-        self.grid[r+7, c+26] = 1
-        self.grid[r+8, c+13] = 1
-        self.grid[r+8, c+17] = 1
-        self.grid[r+9, c+14] = 1
-        self.grid[r+9, c+15] = 1
+    def insertGliderGun(self, index=(0, 0)):
+        self.grid[index[0] + 5, index[1] + 1] = self.aliveValue
+        self.grid[index[0] + 5, index[1] + 2] = self.aliveValue
 
-    def insertFromFile(self, filename, idx=(0, 0)):
-        w, h, cells = parse_pattern(filename)
-        for r, c in cells:
-            tr, tc = idx[0] + r, idx[1] + c
+    def insertFromFile(self, filename, index=(0, 0)):
+        width, height, live_cells = parse_pattern(filename)
+        for r, c in live_cells:
+            tr = index[0] + r
+            tc = index[1] + c
             if 0 <= tr < self.rows and 0 <= tc < self.cols:
-                self.grid[tr, tc] = 1
+                self.grid[tr, tc] = self.aliveValue
