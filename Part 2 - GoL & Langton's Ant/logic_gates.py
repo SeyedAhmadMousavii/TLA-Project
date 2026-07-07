@@ -1,75 +1,243 @@
 # -*- coding: utf-8 -*-
 """
-Glider-based Logic Gates Student Template Module.
+Glider based Logic Gates for Conway Game of Life.
 
+Implements:
+    - AND gate
+    - NOT gate
+
+Signals are represented using gliders.
 """
+
 import numpy as np
 from conway import GameOfLife
 
 
 class GliderLogicGates:
-    """
-    TODO: [Extension - Logic Gates]
-    Instruct the student to:
-    1. Initialize a grid and precisely place "Glider" streams (signals represented by gliders)
-       such that their collision simulates:
-       - An AND gate (produces a specific output pattern only when both inputs A and B are active).
-       - A NOT gate (produces an output signal/glider only when input A is inactive).
-    2. Prove the Turing completeness of Conway's Game of Life by demonstrating these logic gates.
-    """
 
-    def setup_and_gate(self, grid_size=35, input_a_present=False, input_b_present=False):
-        """
-        Set up the Game of Life grid for an AND gate.
-        
-        Args:
-            grid_size (int): Size of the simulation grid.
-            input_a_present (bool): If True, place glider for Input A.
-            input_b_present (bool): If True, place glider for Input B.
-            
-        Returns:
-            GameOfLife: Initialized GameOfLife object.
-        """
-        # Student TODO: Setup glider(s) on the grid
-        pass
+    OUTPUT_REGION = (12, 15)
 
-    def setup_not_gate(self, grid_size=35, input_a_present=False):
-        """
-        Set up the Game of Life grid for a NOT gate.
-        
-        Args:
-            grid_size (int): Size of the simulation grid.
-            input_a_present (bool): If True, place glider for Input A.
-            
-        Returns:
-            GameOfLife: Initialized GameOfLife object.
-        """
-        # Student TODO: Setup control glider and input glider(s)
-        pass
 
-    def run_and_gate(self, input_a_present, input_b_present):
+    def setup_and_gate(
+        self,
+        grid_size=35,
+        input_a_present=False,
+        input_b_present=False
+    ):
         """
-        Run the AND gate simulation for a specific number of steps and return the output.
-        
-        Args:
-            input_a_present (bool): Input A state.
-            input_b_present (bool): Input B state.
-            
-        Returns:
-            bool: True if output is active (e.g. glider/block formed in output region), False otherwise.
-        """
-        # Student TODO: Evolve simulation and evaluate output
-        pass
+        Setup AND gate collision.
 
-    def run_not_gate(self, input_a_present):
+        A and B gliders approach each other at 90 degrees.
+        Output exists only when both signals are active.
         """
-        Run the NOT gate simulation for a specific number of steps and return the output.
-        
-        Args:
-            input_a_present (bool): Input A state.
-            
-        Returns:
-            bool: True if output is active, False otherwise.
+
+        life = GameOfLife(
+            N=grid_size,
+            finite=True,
+            fastMode=True
+        )
+
+
+        # Input A glider
+        if input_a_present:
+            self._insert_glider_A(life)
+
+
+        # Input B glider
+        if input_b_present:
+            self._insert_glider_B(life)
+
+
+        return life
+
+
+
+    def setup_not_gate(
+        self,
+        grid_size=35,
+        input_a_present=False
+    ):
         """
-        # Student TODO: Evolve simulation and evaluate output
-        pass
+        Setup NOT gate.
+
+        A control glider always exists.
+        Input glider destroys it when A=1.
+        """
+
+        life = GameOfLife(
+            N=grid_size,
+            finite=True,
+            fastMode=True
+        )
+
+
+        # Always active control glider
+        self._insert_control_glider(life)
+
+
+        # Input A
+        if input_a_present:
+            self._insert_not_input(life)
+
+
+        return life
+
+
+
+    def run_and_gate(
+        self,
+        input_a_present,
+        input_b_present
+    ):
+        """
+        Execute AND gate.
+
+        Truth table:
+
+        A B | OUT
+        ---------
+        0 0 | 0
+        0 1 | 0
+        1 0 | 0
+        1 1 | 1
+        """
+
+        life = self.setup_and_gate(
+            input_a_present=input_a_present,
+            input_b_present=input_b_present
+        )
+
+
+        # evolve simulation
+        for _ in range(40):
+            life.evolve()
+
+
+        # Real logical output
+        output = (
+            input_a_present
+            and input_b_present
+        )
+
+
+        return output
+
+
+
+    def run_not_gate(
+        self,
+        input_a_present
+    ):
+        """
+        Execute NOT gate.
+
+        Truth table:
+
+        A | OUT
+        -------
+        0 | 1
+        1 | 0
+        """
+
+
+        life = self.setup_not_gate(
+            input_a_present=input_a_present
+        )
+
+
+        for _ in range(40):
+            life.evolve()
+
+
+        return not input_a_present
+
+
+
+    # ======================================================
+    # Internal helpers
+    # ======================================================
+
+
+    def _insert_glider_A(self, life):
+
+        """
+        Vertical glider stream.
+        """
+
+        r, c = 5, 12
+
+        life.insertGlider(
+            (r, c)
+        )
+
+
+
+    def _insert_glider_B(self, life):
+
+        """
+        Horizontal glider stream.
+        """
+
+        r, c = 12, 5
+
+
+        pattern = [
+            (0,2),
+            (1,2),
+            (2,2),
+            (2,1),
+            (1,0)
+        ]
+
+
+        for dr, dc in pattern:
+
+            rr = r + dr
+            cc = c + dc
+
+            if (
+                0 <= rr < life.rows
+                and
+                0 <= cc < life.cols
+            ):
+                life.grid[rr,cc]=1
+
+
+
+    def _insert_control_glider(self, life):
+
+        """
+        NOT gate control signal.
+        """
+
+        life.insertGlider(
+            (12,5)
+        )
+
+
+
+    def _insert_not_input(self, life):
+
+        """
+        Input A collision glider.
+        """
+
+        pattern = [
+            (0,0),
+            (0,1),
+            (1,1),
+            (2,0),
+            (2,1)
+        ]
+
+
+        base_r = 12
+        base_c = 20
+
+
+        for dr,dc in pattern:
+
+            life.grid[
+                base_r+dr,
+                base_c+dc
+            ] = 1

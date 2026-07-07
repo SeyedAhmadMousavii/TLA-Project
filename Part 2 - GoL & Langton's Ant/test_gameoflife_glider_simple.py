@@ -12,10 +12,9 @@ CELL_SCALE = 10
 
 def main():
 	"""Show the glider evolution in a pygame window."""
-	life = conway.GameOfLife(N=512, fastMode=True)
- 
-	# life.insertBlinker((0,0))
-	life.insertGlider((0,0))        # It travels diagonally across the Life grid at a speed of c/4
+	life = conway.GameOfLife(N=64, finite=False, fastMode=True)
+	life.insertBlinker((0,0))
+	# life.insertGlider((0,0))        # It travels diagonally across the Life grid at a speed of c/4
 	# life.insertGliderGun((0,0))     # Gosper glider gun consists of two queen bee shuttles stabilized by two blocks.
 	# life.insertFromFile("snail spaceship.cells", (0,30))
 	# life.insertFromFile("dragon spaceship.cells", (0,30))
