@@ -118,8 +118,6 @@ def test_wrapping():
     print_grid(torus_game.grid)
 
 
-    # فقط بررسی می‌کنیم که الگو نابود نشده
-    # چون wrapping رفتار متفاوت دارد
 
     if np.sum(torus_game.grid) > 0:
         print("PASS: Toroidal wrapping works")
