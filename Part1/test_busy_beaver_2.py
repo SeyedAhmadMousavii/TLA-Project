@@ -16,18 +16,41 @@ bbeaver2 = TuringMachine(
     },
     start_state='a', accept_state='h', reject_state='r', blank_symbol='0'
 )
+
+# ============================================================================
+# 3-state with 14 steps
+# bbeaver3 = TuringMachine(
+# {
+#     ('a','0'): ('b','1','R'),
+#     ('a','1'): ('h','1','R'),
+
+#     ('b','0'): ('c','0','R'),
+#     ('b','1'): ('b','1','R'),
+
+#     ('c','0'): ('c','1','L'),
+#     ('c','1'): ('a','1','L'),
+# },
+# start_state='a', accept_state='h', reject_state='r', blank_symbol='0'
+# )
+
+# =============================================================================
+
+# 3-state with 21 steps
 bbeaver3 = TuringMachine(
-    {
-        # 3-state Busy Beaver
-        ('a', '0'): ('b', '1', 'R'),
-        ('a', '1'): ('h', '1', 'R'),
-        ('b', '0'): ('c', '0', 'R'),
-        ('b', '1'): ('b', '1', 'R'),
-        ('c', '0'): ('c', '1', 'L'),
-        ('c', '1'): ('a', '1', 'L'),
-    },
-    start_state='a', accept_state='h', reject_state='r', blank_symbol='0'
+{
+    ('a','0'): ('b','1','R'),
+    ('a','1'): ('h','1','R'),
+
+    ('b','0'): ('b','1','L'),
+    ('b','1'): ('c','0','R'),
+
+    ('c','0'): ('c','1','L'),
+    ('c','1'): ('a','1','L'),
+},
+start_state='a', accept_state='h', reject_state='r', blank_symbol='0'
 )
+
+
 bbeaver4 = TuringMachine(
     {
         # 4-state Busy Beaver
@@ -57,4 +80,4 @@ if __name__ == "__main__":
         bbeaver4.debug(w, step_limit=1000)
         print()
 
-    run('00000000000000')
+    run("")
